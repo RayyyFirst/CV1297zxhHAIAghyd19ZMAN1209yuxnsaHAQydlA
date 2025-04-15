@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
-  "changelog": "Release V1",
-  "downloadUrl": "https://hollowspoofer.vercel.app"
+  "version": "1.10",
+  "changelog": "Fixed batch handling, can now spoof over 50k anims in 1 run.",
+  "downloadUrl": "https://www.mediafire.com/file/2bd950okannhx0t/HollowSpooferV1.10.zip/file"
 }
