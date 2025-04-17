@@ -1,5 +1,5 @@
 {
-  "version": "1.10",
-  "changelog": "Fixed batch handling, can now spoof over 50k anims in 1 run.",
-  "downloadUrl": "https://www.mediafire.com/file/2bd950okannhx0t/HollowSpooferV1.10.zip/file"
+  "version": "1.11",
+  "changelog": "Added more advanced script spoofing support, redid the animation upload info console logging.",
+  "downloadUrl": "https://www.mediafire.com/file/jbi10xvsy9jk83s/HollowSpooferV1.11.zip/file"
 }
