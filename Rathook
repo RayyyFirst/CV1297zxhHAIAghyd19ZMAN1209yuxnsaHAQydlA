@@ -1,0 +1,286 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local ADMINRemote = ReplicatedStorage:WaitForChild("Events", 10).ADMIN
+local PlayerStats = ReplicatedStorage:WaitForChild("PlayerStats")
+local UpperTorso = Character:WaitForChild("UpperTorso")
+
+local bypassActive = true
+local noclipEnabled = false
+local speedValue = 24
+local jumpValue = 60
+local originalWalkSpeed = Humanoid.WalkSpeed
+local originalJumpPower = Humanoid.JumpPower
+
+local GetPlayerBannedFunction
+for i, v in next, getgc(false) do
+    if type(v) == "function" then
+
+        local info = debug.getinfo(v)
+        if info and info.name == "GetPlayerBanned" then
+            GetPlayerBannedFunction = v
+            break
+        end
+    end
+end
+
+
+if not GetPlayerBannedFunction then
+    for i, v in next, getgc(false) do
+        if type(v) == "function" then
+            local success, result = pcall(function()
+           
+                local upvalues = debug.getupvalues(v)
+                for _, upvalue in pairs(upvalues) do
+                    if type(upvalue) == "table" and upvalue.Banned then
+                        return true
+                    end
+                end
+                
+
+                local source = debug.getinfo(v).source
+                if source and (source:find("Banned") or source:find("ADMIN")) then
+                    return true
+                end
+                
+                return false
+            end)
+            
+            if success and result then
+                GetPlayerBannedFunction = v
+                break
+            end
+        end
+    end
+end
+
+
+if GetPlayerBannedFunction then
+    local OldFunc
+    OldFunc = hookfunction(GetPlayerBannedFunction, newcclosure(function(reason)
+        if bypassActive then
+            print("[Bypass] Prevented ban for reason: " .. tostring(reason))
+            return
+        end
+        return OldFunc(reason)
+    end))
+else
+    warn("[Bypass] Could not find GetPlayerBanned function - partial bypass only")
+end
+
+
+local OldNameCall
+OldNameCall = hookmetamethod(game, "__namecall", newcclosure(function(...)
+    local self, arg1 = ...
+    local Method = getnamecallmethod()
+    
+    if self == ADMINRemote and (Method == "FireServer" or Method == "fireServer" or Method == "InvokeServer" or Method == "invokeServer") then
+        if bypassActive then
+            print("[Bypass] Blocked ADMIN remote call with args:", arg1)
+            return
+        end
+    end
+    
+    return OldNameCall(...)
+end))
+
+
+local function hookPlayerStats()
+    local originalFindFirstChild = PlayerStats.FindFirstChild
+    PlayerStats.FindFirstChild = function(self, playerName)
+        local result = originalFindFirstChild(self, playerName)
+        
+        if result and bypassActive then
+            if not result:FindFirstChild("Banned") then
+                local bannedValue = Instance.new("BoolValue")
+                bannedValue.Name = "Banned"
+                bannedValue.Value = false
+                bannedValue.Parent = result
+            else
+
+                result.Banned.Value = false
+                
+
+                pcall(function()
+                    local bannedValue = result:FindFirstChild("Banned")
+                    local mt = getmetatable(bannedValue)
+                    if not mt then
+                        mt = {}
+                        setmetatable(bannedValue, mt)
+                    end
+                    
+                    mt.__index = function(t, k)
+                        if k == "Value" then
+                            return false
+                        end
+                        return rawget(t, k)
+                    end
+                end)
+            end
+        end
+        
+        return result
+    end
+end
+
+
+pcall(hookPlayerStats)
+
+
+pcall(function()
+    local HumanoidMT = getmetatable(Humanoid)
+    if HumanoidMT then
+        local OldHumanoidIndex = HumanoidMT.__index
+        local OldHumanoidNewIndex = HumanoidMT.__newindex
+        
+        HumanoidMT.__index = newcclosure(function(self, key)
+            if bypassActive then
+                if key == "WalkSpeed" then
+                    return speedValue
+                elseif key == "JumpPower" then
+                    return jumpValue
+                end
+            end
+            
+            return OldHumanoidIndex(self, key)
+        end)
+        
+        HumanoidMT.__newindex = newcclosure(function(self, key, value)
+            if bypassActive then
+                if key == "WalkSpeed" then
+                    speedValue = value
+                    if value > 24 then
+                        value = 24
+                    end
+                elseif key == "JumpPower" then
+                    jumpValue = value
+                    if value > 60 then
+                        value = 60
+                    end
+                end
+            end
+            
+            return OldHumanoidNewIndex(self, key, value)
+        end)
+    end
+end)
+
+
+pcall(function()
+    local PartMT = getmetatable(UpperTorso)
+    if PartMT then
+        local OldPartIndex = PartMT.__index
+        local OldPartNewIndex = PartMT.__newindex
+        
+        PartMT.__index = newcclosure(function(self, key)
+            if bypassActive and key == "CanCollide" and noclipEnabled then
+                return false
+            end
+            
+            return OldPartIndex(self, key)
+        end)
+        
+        PartMT.__newindex = newcclosure(function(self, key, value)
+            if bypassActive and key == "CanCollide" and noclipEnabled then
+                value = false
+            end
+            
+            return OldPartNewIndex(self, key, value)
+        end)
+    end
+end)
+
+
+local function setWalkSpeed(speed)
+    speedValue = speed
+    pcall(function() Humanoid.WalkSpeed = 24 end)
+    
+    spawn(function()
+        while bypassActive and speedValue ~= 24 do
+            Humanoid.WalkSpeed = speedValue
+            wait()
+        end
+    end)
+end
+
+local function setJumpPower(power)
+    jumpValue = power
+    pcall(function() Humanoid.JumpPower = 60 end)
+    
+ 
+    spawn(function()
+        while bypassActive and jumpValue ~= 60 do
+            Humanoid.JumpPower = jumpValue
+            wait()
+        end
+    end)
+end
+
+local noclipConnection
+local function toggleNoclip()
+    noclipEnabled = not noclipEnabled
+    
+    if noclipEnabled then
+
+        if noclipConnection then
+            pcall(function() noclipConnection:Disconnect() end)
+        end
+        
+
+        noclipConnection = RunService.Stepped:Connect(function()
+            pcall(function()
+                for _, part in pairs(Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+        end)
+    else
+
+        if noclipConnection then
+            pcall(function() noclipConnection:Disconnect() end)
+            noclipConnection = nil
+        end
+    end
+    
+    return noclipEnabled
+end
+
+local function resetAll()
+    setWalkSpeed(originalWalkSpeed)
+    setJumpPower(originalJumpPower)
+    if noclipEnabled then
+        toggleNoclip()
+    end
+end
+
+local function toggleBypass()
+    bypassActive = not bypassActive
+    if not bypassActive then
+        resetAll()
+    end
+    return bypassActive
+end
+
+print("Enhanced anti-cheat bypass loaded!")
+
+return {
+    setWalkSpeed = setWalkSpeed,
+    setJumpPower = setJumpPower,
+    toggleNoclip = toggleNoclip,
+    resetAll = resetAll,
+    toggleBypass = toggleBypass,
+    status = function()
+        return {
+            bypassActive = bypassActive,
+            noclipEnabled = noclipEnabled,
+            walkSpeed = speedValue,
+            jumpPower = jumpValue
+        }
+    end
+}
